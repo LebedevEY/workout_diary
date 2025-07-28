@@ -1,5 +1,5 @@
 import { Context, InlineKeyboard } from 'grammy';
-import { WorkoutDatabase } from '../db/database.js';
+import { WorkoutDatabase } from '../db/database';
 
 interface SessionData {
   selectedExercise?: number;

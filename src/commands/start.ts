@@ -1,5 +1,5 @@
 import { Context, Keyboard } from 'grammy';
-import { WorkoutDatabase } from '../db/database.js';
+import { WorkoutDatabase } from '../db/database';
 
 export async function startCommand(ctx: Context, db: WorkoutDatabase) {
   if (!ctx.from) return;
