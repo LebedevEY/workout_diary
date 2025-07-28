@@ -1,5 +1,5 @@
 import { Context, InlineKeyboard } from 'grammy';
-import { WorkoutDatabase } from '../db/database.js';
+import { WorkoutDatabase } from '../db/database';
 
 interface HistorySession {
   awaitingDate?: boolean;
@@ -149,7 +149,7 @@ async function showWorkouts(ctx: Context, workouts: Array<any>, title: string) {
     groupedByDate[date].push(workout);
   });
 
-  Object.keys(groupedByDate).sort().reverse().forEach(date => {
+  Object.keys(groupedByDate).sort().forEach(date => {
     message += `📅 ${formatDate(date)}:\n`;
     
     const exerciseGroups: { [key: string]: Array<any> } = {};
@@ -160,7 +160,13 @@ async function showWorkouts(ctx: Context, workouts: Array<any>, title: string) {
       exerciseGroups[workout.exercise_name].push(workout);
     });
     
-    Object.keys(exerciseGroups).forEach(exerciseName => {
+    Object.keys(exerciseGroups)
+      .sort((a, b) => {
+        const firstSetA = exerciseGroups[a][0];
+        const firstSetB = exerciseGroups[b][0];
+        return firstSetA.created_at.localeCompare(firstSetB.created_at);
+      })
+      .forEach(exerciseName => {
       const sets = exerciseGroups[exerciseName].sort((a, b) => {
         const aSetNum = a.set_number || 1;
         const bSetNum = b.set_number || 1;

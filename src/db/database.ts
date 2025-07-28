@@ -99,6 +99,20 @@ export class WorkoutDatabase {
     return stmt.all() as Array<{ id: number; name: string; category: string }>;
   }
 
+  createExercise(name: string, category: string): number {
+    const stmt = this.db.prepare(`
+      INSERT INTO exercises (name, category) VALUES (?, ?)
+    `);
+    const result = stmt.run(name, category);
+    return result.lastInsertRowid as number;
+  }
+
+  exerciseExists(name: string): boolean {
+    const stmt = this.db.prepare('SELECT COUNT(*) as count FROM exercises WHERE name = ?');
+    const result = stmt.get(name) as { count: number };
+    return result.count > 0;
+  }
+
   addWorkout(userId: number, exerciseId: number, weight: number, reps: number, setNumber: number = 1): void {
     const stmt = this.db.prepare(`
       INSERT INTO workouts (user_id, exercise_id, weight, reps, set_number) 

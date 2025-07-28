@@ -20,6 +20,11 @@ import {
   handleDateInput, 
   isAwaitingHistoryInput 
 } from '../commands/history.js';
+import {
+  createExerciseCommand,
+  handleCreateExerciseInput,
+  isAwaitingCreateExerciseInput
+} from '../commands/createExercise.js';
 
 export class WorkoutBot {
   private bot: Bot;
@@ -37,6 +42,7 @@ export class WorkoutBot {
     this.bot.command('add', (ctx) => addCommand(ctx, this.db));
     this.bot.command('addset', (ctx) => addSetCommand(ctx, this.db));
     this.bot.command('history', (ctx) => historyCommand(ctx, this.db));
+    this.bot.command('create', (ctx) => createExerciseCommand(ctx, this.db));
     this.bot.command('help', helpCommand);
 
     this.bot.on('callback_query:data', async (ctx) => {
@@ -82,8 +88,10 @@ export class WorkoutBot {
         await handleAddSetInput(ctx, this.db);
       } else if (isAwaitingHistoryInput(ctx.from.id)) {
         await handleDateInput(ctx, this.db);
+      } else if (isAwaitingCreateExerciseInput(ctx.from.id)) {
+        await handleCreateExerciseInput(ctx, this.db);
       } else {
-        await ctx.reply('Используйте кнопки меню или команды:\n/add - добавить упражнение\n/addset - добавить подход\n/history - посмотреть историю\n/help - помощь');
+        await ctx.reply('Используйте кнопки меню или команды:\n/add - добавить упражнение\n/addset - добавить подход\n/history - посмотреть историю\n/create - создать новое упражнение\n/help - помощь');
       }
     });
   }
@@ -117,6 +125,7 @@ export class WorkoutBot {
       { command: 'add', description: 'Добавить упражнение' },
       { command: 'addset', description: 'Добавить подход к упражнению' },
       { command: 'history', description: 'История тренировок' },
+      { command: 'create', description: 'Создать новое упражнение' },
       { command: 'help', description: 'Помощь и инструкции' }
     ]);
   }
