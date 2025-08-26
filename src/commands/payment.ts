@@ -9,10 +9,10 @@ interface PaymentSessionData {
 
 const paymentSessions = new Map<number, PaymentSessionData>()
 
-function isValidDateMMDDYYYY(date: string): boolean {
+function isValidDateDDMMYYYY(date: string): boolean {
   const regex = /^\d{2}\.\d{2}\.\d{4}$/
   if (!regex.test(date)) return false
-  const [mm, dd, yyyy] = date.split('.')
+  const [dd, mm, yyyy] = date.split('.')
   const y = parseInt(yyyy, 10)
   const m = parseInt(mm, 10)
   const d = parseInt(dd, 10)
@@ -20,14 +20,14 @@ function isValidDateMMDDYYYY(date: string): boolean {
   return !isNaN(dt.getTime()) && dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d
 }
 
-function mmddyyyyToISO(date: string): string {
-  const [mm, dd, yyyy] = date.split('.')
+function ddmmyyyyToISO(date: string): string {
+  const [dd, mm, yyyy] = date.split('.')
   return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`
 }
 
-function isoToMMDDYYYY(iso: string): string {
+function isoToDDMMYYYY(iso: string): string {
   const [y, m, d] = iso.split('-')
-  return `${m}.${d}.${y}`
+  return `${d}.${m}.${y}`
 }
 
 export async function recordPaymentCommand(ctx: Context, db: WorkoutDatabase) {
@@ -38,7 +38,7 @@ export async function recordPaymentCommand(ctx: Context, db: WorkoutDatabase) {
     return
   }
   paymentSessions.set(ctx.from.id, { awaitingDate: true })
-  await ctx.reply('Введите дату начала оплаты в формате MM.DD.YYYY')
+  await ctx.reply('Введите дату начала оплаты в формате ДД.ММ.ГГГГ')
 }
 
 export async function handleRecordPaymentInput(ctx: Context, db: WorkoutDatabase) {
@@ -48,8 +48,8 @@ export async function handleRecordPaymentInput(ctx: Context, db: WorkoutDatabase
 
   if (session.awaitingDate) {
     const date = ctx.message.text.trim()
-    if (!isValidDateMMDDYYYY(date)) {
-      await ctx.reply('Некорректная дата. Используйте формат MM.DD.YYYY')
+    if (!isValidDateDDMMYYYY(date)) {
+      await ctx.reply('Некорректная дата. Используйте формат ДД.ММ.ГГГГ')
       return
     }
     session.startDate = date
@@ -73,13 +73,13 @@ export async function handleRecordPaymentInput(ctx: Context, db: WorkoutDatabase
       return
     }
 
-    const iso = mmddyyyyToISO(session.startDate)
+    const iso = ddmmyyyyToISO(session.startDate)
     db.upsertPayment(userId, iso, paid)
     paymentSessions.delete(ctx.from.id)
 
     const remainingInfo = db.getRemainingSessions(userId)
     if (remainingInfo) {
-      const startDisp = isoToMMDDYYYY(remainingInfo.start_date)
+      const startDisp = isoToDDMMYYYY(remainingInfo.start_date)
       await ctx.reply(`Оплата сохранена с ${startDisp}.\nОплачено: ${remainingInfo.paid}.\nПрошло тренировок: ${remainingInfo.done}.\nОсталось: ${Math.max(remainingInfo.remaining, 0)}`)
     } else {
       await ctx.reply('Оплата сохранена')
@@ -105,6 +105,6 @@ export async function remainingSessionsCommand(ctx: Context, db: WorkoutDatabase
     return
   }
   const remaining = Math.max(info.remaining, 0)
-  const startDisp = isoToMMDDYYYY(info.start_date)
+  const startDisp = isoToDDMMYYYY(info.start_date)
   await ctx.reply(`С ${startDisp} прошло тренировок: ${info.done}.\nОплачено: ${info.paid}.\nОсталось: ${remaining}`)
 }

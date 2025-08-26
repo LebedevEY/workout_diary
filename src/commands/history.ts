@@ -67,13 +67,13 @@ export async function handleHistorySelection(ctx: Context, db: WorkoutDatabase) 
       case 'history_custom_date':
         historySessions.set(ctx.from.id, { awaitingDate: true });
         await ctx.answerCallbackQuery();
-        await ctx.editMessageText('Введите дату в формате MM.DD.YYYY (например: 07.22.2024):');
+        await ctx.editMessageText('Введите дату в формате ДД.ММ.ГГГГ (например: 22.07.2024):');
         return;
 
       case 'history_period':
         historySessions.set(ctx.from.id, { awaitingPeriod: 'start' });
         await ctx.answerCallbackQuery();
-        await ctx.editMessageText('Введите начальную дату периода в формате MM.DD.YYYY:');
+        await ctx.editMessageText('Введите начальную дату периода в формате ДД.ММ.ГГГГ:');
         return;
     }
 
@@ -94,7 +94,7 @@ export async function handleDateInput(ctx: Context, db: WorkoutDatabase) {
   const dateText = ctx.message.text.trim();
   
   if (!isValidDate(dateText)) {
-    await ctx.reply('Неверный формат даты. Используйте формат MM.DD.YYYY (например: 07.22.2024):');
+    await ctx.reply('Неверный формат даты. Используйте формат ДД.ММ.ГГГГ (например: 22.07.2024):');
     return;
   }
   
@@ -114,7 +114,7 @@ export async function handleDateInput(ctx: Context, db: WorkoutDatabase) {
     } else if (session.awaitingPeriod === 'start') {
       session.startDate = isoDate;
       session.awaitingPeriod = 'end';
-      await ctx.reply('Введите конечную дату периода в формате MM.DD.YYYY:');
+      await ctx.reply('Введите конечную дату периода в формате ДД.ММ.ГГГГ:');
     } else if (session.awaitingPeriod === 'end' && session.startDate) {
       if (isoDate < session.startDate) {
         await ctx.reply('Конечная дата не может быть раньше начальной. Введите корректную конечную дату:');
@@ -197,10 +197,8 @@ async function showWorkouts(ctx: Context, workouts: Array<any>, title: string) {
 function isValidDate(dateString: string): boolean {
   const regex = /^\d{2}\.\d{2}\.\d{4}$/;
   if (!regex.test(dateString)) return false;
-
-  const [month, day, year] = dateString.split('.').map(Number);
+  const [day, month, year] = dateString.split('.').map(Number);
   const date = new Date(year, month - 1, day);
-
   return date instanceof Date && !isNaN(date.getTime()) &&
          date.getDate() === day &&
          date.getMonth() === month - 1 &&
@@ -208,7 +206,7 @@ function isValidDate(dateString: string): boolean {
 }
 
 function convertToISODate(dateString: string): string {
-  const [month, day, year] = dateString.split('.');
+  const [day, month, year] = dateString.split('.');
   return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
 }
 
@@ -218,7 +216,7 @@ function formatDisplayDate(dateString: string): string {
 
 function formatDate(isoDate: string): string {
   const [y, m, d] = isoDate.split('-');
-  return `${m}.${d}.${y}`;
+  return `${d}.${m}.${y}`;
 }
 
 export function isAwaitingHistoryInput(userId: number): boolean {

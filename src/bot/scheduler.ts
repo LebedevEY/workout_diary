@@ -12,9 +12,9 @@ function todayYMD(tz: string): string {
   return `${y}-${m}-${d}`
 }
 
-function isoToMMDDYYYY(iso: string): string {
+function isoToDDMMYYYY(iso: string): string {
   const [y, m, d] = iso.split('-')
-  return `${m}.${d}.${y}`
+  return `${d}.${m}.${y}`
 }
 
 export function setupScheduler(bot: Bot, db: WorkoutDatabase) {
@@ -29,7 +29,7 @@ export function setupScheduler(bot: Bot, db: WorkoutDatabase) {
           const today = todayYMD(tz)
           if (last !== today) {
             const remaining = 0
-            const startDisp = isoToMMDDYYYY(p.start_date)
+            const startDisp = isoToDDMMYYYY(p.start_date)
             await bot.api.sendMessage(
               p.telegram_id,
               `Напоминание: с ${startDisp} прошло тренировок: ${done}. Оплачено: ${p.paid_sessions}. Осталось: ${remaining}. Обновите оплату командой /pay`
