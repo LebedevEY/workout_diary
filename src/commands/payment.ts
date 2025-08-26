@@ -9,10 +9,25 @@ interface PaymentSessionData {
 
 const paymentSessions = new Map<number, PaymentSessionData>()
 
-function isValidDate(date: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false
-  const d = new Date(date + 'T00:00:00Z')
-  return !isNaN(d.getTime())
+function isValidDateMMDDYYYY(date: string): boolean {
+  const regex = /^\d{2}\.\d{2}\.\d{4}$/
+  if (!regex.test(date)) return false
+  const [mm, dd, yyyy] = date.split('.')
+  const y = parseInt(yyyy, 10)
+  const m = parseInt(mm, 10)
+  const d = parseInt(dd, 10)
+  const dt = new Date(y, m - 1, d)
+  return !isNaN(dt.getTime()) && dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d
+}
+
+function mmddyyyyToISO(date: string): string {
+  const [mm, dd, yyyy] = date.split('.')
+  return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`
+}
+
+function isoToMMDDYYYY(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  return `${m}.${d}.${y}`
 }
 
 export async function recordPaymentCommand(ctx: Context, db: WorkoutDatabase) {
@@ -23,7 +38,7 @@ export async function recordPaymentCommand(ctx: Context, db: WorkoutDatabase) {
     return
   }
   paymentSessions.set(ctx.from.id, { awaitingDate: true })
-  await ctx.reply('Введите дату начала оплаты в формате YYYY-MM-DD')
+  await ctx.reply('Введите дату начала оплаты в формате MM.DD.YYYY')
 }
 
 export async function handleRecordPaymentInput(ctx: Context, db: WorkoutDatabase) {
@@ -33,8 +48,8 @@ export async function handleRecordPaymentInput(ctx: Context, db: WorkoutDatabase
 
   if (session.awaitingDate) {
     const date = ctx.message.text.trim()
-    if (!isValidDate(date)) {
-      await ctx.reply('Некорректная дата. Используйте формат YYYY-MM-DD')
+    if (!isValidDateMMDDYYYY(date)) {
+      await ctx.reply('Некорректная дата. Используйте формат MM.DD.YYYY')
       return
     }
     session.startDate = date
@@ -58,14 +73,14 @@ export async function handleRecordPaymentInput(ctx: Context, db: WorkoutDatabase
       return
     }
 
-    db.upsertPayment(userId, session.startDate, paid)
+    const iso = mmddyyyyToISO(session.startDate)
+    db.upsertPayment(userId, iso, paid)
     paymentSessions.delete(ctx.from.id)
 
     const remainingInfo = db.getRemainingSessions(userId)
     if (remainingInfo) {
-      await ctx.reply(
-        `Оплата сохранена с ${remainingInfo.start_date}.\nОплачено: ${remainingInfo.paid}.\nПрошло тренировок: ${remainingInfo.done}.\nОсталось: ${Math.max(remainingInfo.remaining, 0)}`
-      )
+      const startDisp = isoToMMDDYYYY(remainingInfo.start_date)
+      await ctx.reply(`Оплата сохранена с ${startDisp}.\nОплачено: ${remainingInfo.paid}.\nПрошло тренировок: ${remainingInfo.done}.\nОсталось: ${Math.max(remainingInfo.remaining, 0)}`)
     } else {
       await ctx.reply('Оплата сохранена')
     }
@@ -90,7 +105,6 @@ export async function remainingSessionsCommand(ctx: Context, db: WorkoutDatabase
     return
   }
   const remaining = Math.max(info.remaining, 0)
-  await ctx.reply(
-    `С ${info.start_date} прошло тренировок: ${info.done}.\nОплачено: ${info.paid}.\nОсталось: ${remaining}`
-  )
+  const startDisp = isoToMMDDYYYY(info.start_date)
+  await ctx.reply(`С ${startDisp} прошло тренировок: ${info.done}.\nОплачено: ${info.paid}.\nОсталось: ${remaining}`)
 }

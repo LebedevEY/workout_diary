@@ -12,6 +12,11 @@ function todayYMD(tz: string): string {
   return `${y}-${m}-${d}`
 }
 
+function isoToMMDDYYYY(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  return `${m}.${d}.${y}`
+}
+
 export function setupScheduler(bot: Bot, db: WorkoutDatabase) {
   const tz = process.env.TZ || 'Europe/Moscow'
   cron.schedule('0 20 * * *', async () => {
@@ -24,9 +29,10 @@ export function setupScheduler(bot: Bot, db: WorkoutDatabase) {
           const today = todayYMD(tz)
           if (last !== today) {
             const remaining = 0
+            const startDisp = isoToMMDDYYYY(p.start_date)
             await bot.api.sendMessage(
               p.telegram_id,
-              `Напоминание: с ${p.start_date} прошло тренировок: ${done}. Оплачено: ${p.paid_sessions}. Осталось: ${remaining}. Обновите оплату командой /pay`
+              `Напоминание: с ${startDisp} прошло тренировок: ${done}. Оплачено: ${p.paid_sessions}. Осталось: ${remaining}. Обновите оплату командой /pay`
             )
             db.updateLastNotified(p.user_id)
           }
