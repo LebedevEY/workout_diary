@@ -10,6 +10,8 @@ export async function startCommand(ctx: Context, db: WorkoutDatabase) {
     .text('📝 Добавить упражнение').row()
     .text('🔄 Добавить подход').row()
     .text('📊 История тренировок').row()
+    .text('💳 Записать оплату').row()
+    .text('📉 Осталось тренировок').row()
     .text('ℹ️ Помощь')
     .resized();
 
@@ -20,6 +22,8 @@ export async function startCommand(ctx: Context, db: WorkoutDatabase) {
 /add - Добавить упражнение
 /addset - Добавить подход к упражнению
 /history - Посмотреть историю тренировок
+/pay - Записать оплату
+/remaining - Остаток тренировок
 
 Начните с добавления упражнения!
   `.trim();

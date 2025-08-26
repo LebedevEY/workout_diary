@@ -25,6 +25,13 @@ import {
   handleCreateExerciseInput,
   isAwaitingCreateExerciseInput
 } from '../commands/createExercise.js';
+import {
+  recordPaymentCommand,
+  handleRecordPaymentInput,
+  isAwaitingRecordPaymentInput,
+  remainingSessionsCommand
+} from '../commands/payment.js';
+import { setupScheduler } from './scheduler.js';
 
 export class WorkoutBot {
   private bot: Bot;
@@ -43,6 +50,8 @@ export class WorkoutBot {
     this.bot.command('addset', (ctx) => addSetCommand(ctx, this.db));
     this.bot.command('history', (ctx) => historyCommand(ctx, this.db));
     this.bot.command('create', (ctx) => createExerciseCommand(ctx, this.db));
+    this.bot.command('pay', (ctx) => recordPaymentCommand(ctx, this.db));
+    this.bot.command('remaining', (ctx) => remainingSessionsCommand(ctx, this.db));
     this.bot.command('help', helpCommand);
 
     this.bot.on('callback_query:data', async (ctx) => {
@@ -76,6 +85,16 @@ export class WorkoutBot {
         await historyCommand(ctx, this.db);
         return;
       }
+
+      if (text === '💳 Записать оплату') {
+        await recordPaymentCommand(ctx, this.db);
+        return;
+      }
+
+      if (text === '📉 Осталось тренировок') {
+        await remainingSessionsCommand(ctx, this.db);
+        return;
+      }
       
       if (text === 'ℹ️ Помощь') {
         await helpCommand(ctx);
@@ -90,8 +109,10 @@ export class WorkoutBot {
         await handleDateInput(ctx, this.db);
       } else if (isAwaitingCreateExerciseInput(ctx.from.id)) {
         await handleCreateExerciseInput(ctx, this.db);
+      } else if (isAwaitingRecordPaymentInput(ctx.from.id)) {
+        await handleRecordPaymentInput(ctx, this.db);
       } else {
-        await ctx.reply('Используйте кнопки меню или команды:\n/add - добавить упражнение\n/addset - добавить подход\n/history - посмотреть историю\n/create - создать новое упражнение\n/help - помощь');
+        await ctx.reply('Используйте кнопки меню или команды:\n/add - добавить упражнение\n/addset - добавить подход\n/history - посмотреть историю\n/create - создать новое упражнение\n/pay - записать оплату\n/remaining - остаток тренировок\n/help - помощь');
       }
     });
   }
@@ -117,6 +138,7 @@ export class WorkoutBot {
     console.log('Запуск бота...');
     await this.bot.start();
     console.log('Бот запущен');
+    setupScheduler(this.bot, this.db);
   }
 
   private async setupBotCommands(): Promise<void> {
@@ -126,6 +148,8 @@ export class WorkoutBot {
       { command: 'addset', description: 'Добавить подход к упражнению' },
       { command: 'history', description: 'История тренировок' },
       { command: 'create', description: 'Создать новое упражнение' },
+      { command: 'pay', description: 'Записать оплату' },
+      { command: 'remaining', description: 'Остаток тренировок' },
       { command: 'help', description: 'Помощь и инструкции' }
     ]);
   }

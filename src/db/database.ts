@@ -41,6 +41,16 @@ export class WorkoutDatabase {
 
       CREATE INDEX IF NOT EXISTS idx_workouts_user_date ON workouts (user_id, created_at);
       CREATE INDEX IF NOT EXISTS idx_workouts_user_exercise ON workouts (user_id, exercise_id);
+
+      CREATE TABLE IF NOT EXISTS payments (
+        user_id INTEGER PRIMARY KEY,
+        start_date TEXT NOT NULL,
+        paid_sessions INTEGER NOT NULL,
+        last_notified_at TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_payments_user ON payments (user_id);
     `);
   }
 
@@ -207,6 +217,68 @@ export class WorkoutDatabase {
       set_number: number;
       created_at: string;
     }>;
+  }
+
+  upsertPayment(userId: number, startDate: string, paidSessions: number): void {
+    const stmt = this.db.prepare(`
+      INSERT INTO payments (user_id, start_date, paid_sessions, last_notified_at)
+      VALUES (?, ?, ?, NULL)
+      ON CONFLICT(user_id) DO UPDATE SET
+        start_date=excluded.start_date,
+        paid_sessions=excluded.paid_sessions,
+        last_notified_at=NULL
+    `);
+    stmt.run(userId, startDate, paidSessions);
+  }
+
+  getPayment(userId: number): { user_id: number; start_date: string; paid_sessions: number; last_notified_at: string | null } | null {
+    const stmt = this.db.prepare(`
+      SELECT user_id, start_date, paid_sessions, last_notified_at
+      FROM payments
+      WHERE user_id = ?
+    `);
+    const row = stmt.get(userId) as { user_id: number; start_date: string; paid_sessions: number; last_notified_at: string | null } | undefined;
+    return row || null;
+  }
+
+  countWorkoutDaysSince(userId: number, startDate: string): number {
+    const stmt = this.db.prepare(`
+      SELECT COUNT(DISTINCT DATE(created_at)) as cnt
+      FROM workouts
+      WHERE user_id = ? AND DATE(created_at) >= ?
+    `);
+    const row = stmt.get(userId, startDate) as { cnt: number };
+    return row.cnt || 0;
+  }
+
+  getRemainingSessions(userId: number): { remaining: number; done: number; paid: number; start_date: string } | null {
+    const payment = this.getPayment(userId);
+    if (!payment) return null;
+    const done = this.countWorkoutDaysSince(userId, payment.start_date);
+    const remaining = payment.paid_sessions - done;
+    return { remaining, done, paid: payment.paid_sessions, start_date: payment.start_date };
+  }
+
+  updateLastNotified(userId: number): void {
+    const stmt = this.db.prepare(`
+      UPDATE payments SET last_notified_at = CURRENT_TIMESTAMP WHERE user_id = ?
+    `);
+    stmt.run(userId);
+  }
+
+  getAllActivePaymentsWithTelegram(): Array<{ user_id: number; telegram_id: number; start_date: string; paid_sessions: number; last_notified_at: string | null }> {
+    const stmt = this.db.prepare(`
+      SELECT p.user_id, u.telegram_id, p.start_date, p.paid_sessions, p.last_notified_at
+      FROM payments p
+      JOIN users u ON u.id = p.user_id
+    `);
+    return stmt.all() as Array<{ user_id: number; telegram_id: number; start_date: string; paid_sessions: number; last_notified_at: string | null }>;
+  }
+
+  getTelegramIdByUserId(userId: number): number | null {
+    const stmt = this.db.prepare('SELECT telegram_id FROM users WHERE id = ?');
+    const row = stmt.get(userId) as { telegram_id: number } | undefined;
+    return row?.telegram_id ?? null;
   }
 
   close(): void {
