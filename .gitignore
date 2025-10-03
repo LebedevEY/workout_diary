@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .env
+admin-ui/dist/
+admin-ui/node_modules/
 *.db
 *.sqlite
 *.sqlite3

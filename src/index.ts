@@ -1,31 +1,52 @@
-import dotenv from 'dotenv';
-import { WorkoutBot } from './bot/bot.js';
+import { spawn } from 'child_process';
+import path from 'path';
 
-dotenv.config();
+console.log('🚀 Запуск Telegram-бота и админ-панели...\n');
 
-const BOT_TOKEN = process.env.BOT_TOKEN;
+const botProcess = spawn('node', [path.join(process.cwd(), 'dist', 'bot-start.js')], {
+  stdio: 'inherit',
+  cwd: process.cwd()
+});
 
-if (!BOT_TOKEN) {
-  console.error('Ошибка: BOT_TOKEN не найден в переменных окружения');
-  console.error('Создайте файл .env и добавьте в него: BOT_TOKEN=your_bot_token');
-  process.exit(1);
-}
+const adminProcess = spawn('node', [path.join(process.cwd(), 'dist', 'admin', 'index.js')], {
+  stdio: 'inherit',
+  cwd: process.cwd()
+});
 
-const bot = new WorkoutBot(BOT_TOKEN);
+botProcess.on('error', (error) => {
+  console.error('Ошибка запуска бота:', error);
+});
 
-process.on('SIGINT', async () => {
-  console.log('\nПолучен сигнал SIGINT. Завершение работы...');
-  await bot.stop();
+adminProcess.on('error', (error) => {
+  console.error('Ошибка запуска админки:', error);
+});
+
+process.on('SIGINT', () => {
+  console.log('\n⏹️  Остановка всех сервисов...');
+  botProcess.kill('SIGINT');
+  adminProcess.kill('SIGINT');
   process.exit(0);
 });
 
-process.on('SIGTERM', async () => {
-  console.log('\nПолучен сигнал SIGTERM. Завершение работы...');
-  await bot.stop();
+process.on('SIGTERM', () => {
+  console.log('\n⏹️  Остановка всех сервисов...');
+  botProcess.kill('SIGTERM');
+  adminProcess.kill('SIGTERM');
   process.exit(0);
 });
 
-bot.start().catch((error) => {
-  console.error('Ошибка при запуске бота:', error);
-  process.exit(1);
+botProcess.on('exit', (code) => {
+  if (code !== 0) {
+    console.error(`❌ Бот завершился с кодом ${code}`);
+    adminProcess.kill();
+    process.exit(code || 1);
+  }
+});
+
+adminProcess.on('exit', (code) => {
+  if (code !== 0) {
+    console.error(`❌ Админка завершилась с кодом ${code}`);
+    botProcess.kill();
+    process.exit(code || 1);
+  }
 });

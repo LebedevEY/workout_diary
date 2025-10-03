@@ -123,6 +123,20 @@ export class WorkoutDatabase {
     return result.count > 0;
   }
 
+  updateExercise(id: number, name: string, category: string): boolean {
+    const stmt = this.db.prepare(`
+      UPDATE exercises SET name = ?, category = ? WHERE id = ?
+    `);
+    const result = stmt.run(name, category, id);
+    return result.changes > 0;
+  }
+
+  getExerciseById(id: number): { id: number; name: string; category: string } | null {
+    const stmt = this.db.prepare('SELECT id, name, category FROM exercises WHERE id = ?');
+    const result = stmt.get(id) as { id: number; name: string; category: string } | undefined;
+    return result || null;
+  }
+
   addWorkout(userId: number, exerciseId: number, weight: number, reps: number, setNumber: number = 1): void {
     const stmt = this.db.prepare(`
       INSERT INTO workouts (user_id, exercise_id, weight, reps, set_number) 
