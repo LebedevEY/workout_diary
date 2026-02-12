@@ -1,5 +1,6 @@
 import { Context, InlineKeyboard } from 'grammy';
 import { WorkoutDatabase } from '../db/database';
+import { SessionManager } from '../utils/sessionManager';
 
 interface SessionData {
   selectedExercise?: number;
@@ -8,7 +9,7 @@ interface SessionData {
   weight?: number;
 }
 
-const sessions = new Map<number, SessionData>();
+const sessions = new SessionManager<SessionData>();
 
 export async function addCommand(ctx: Context, db: WorkoutDatabase) {
   if (!ctx.from) return;
@@ -104,4 +105,8 @@ export async function handleWorkoutInput(ctx: Context, db: WorkoutDatabase) {
 export function isAwaitingInput(userId: number): boolean {
   const session = sessions.get(userId);
   return !!(session?.awaitingWeight || session?.awaitingReps);
+}
+
+export function clearAddSession(userId: number): void {
+  sessions.delete(userId);
 }

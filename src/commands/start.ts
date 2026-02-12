@@ -7,11 +7,9 @@ export async function startCommand(ctx: Context, db: WorkoutDatabase) {
   db.createUser(ctx.from.id, ctx.from.username, ctx.from.first_name);
 
   const keyboard = new Keyboard()
-    .text('📝 Добавить упражнение').row()
-    .text('🔄 Добавить подход').row()
-    .text('📊 История тренировок').row()
-    .text('💳 Записать оплату').row()
-    .text('📉 Осталось тренировок').row()
+    .text('📝 Добавить упражнение').text('🔄 Добавить подход').row()
+    .text('📊 История тренировок').text('📉 Осталось тренировок').row()
+    .text('💳 Записать оплату').text('↩️ Отменить последнее').row()
     .text('ℹ️ Помощь')
     .resized();
 

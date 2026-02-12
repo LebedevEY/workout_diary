@@ -2,35 +2,37 @@ import { Bot, Context, GrammyError, HttpError } from 'grammy';
 import { WorkoutDatabase } from '../db/database.js';
 import { startCommand } from '../commands/start.js';
 import { helpCommand } from '../commands/help.js';
-import { 
-  addCommand, 
-  handleExerciseSelection, 
-  handleWorkoutInput, 
-  isAwaitingInput 
+import {
+  addCommand,
+  handleExerciseSelection,
+  handleWorkoutInput,
+  isAwaitingInput,
 } from '../commands/add.js';
 import {
   addSetCommand,
   handleAddSetSelection,
   handleAddSetInput,
-  isAwaitingAddSetInput
+  isAwaitingAddSetInput,
 } from '../commands/addSet.js';
-import { 
-  historyCommand, 
-  handleHistorySelection, 
-  handleDateInput, 
-  isAwaitingHistoryInput 
+import {
+  historyCommand,
+  handleHistorySelection,
+  handleDateInput,
+  isAwaitingHistoryInput,
 } from '../commands/history.js';
 import {
   createExerciseCommand,
   handleCreateExerciseInput,
-  isAwaitingCreateExerciseInput
+  isAwaitingCreateExerciseInput,
 } from '../commands/createExercise.js';
 import {
   recordPaymentCommand,
   handleRecordPaymentInput,
   isAwaitingRecordPaymentInput,
-  remainingSessionsCommand
+  remainingSessionsCommand,
 } from '../commands/payment.js';
+import { cancelCommand } from '../commands/cancel.js';
+import { undoCommand } from '../commands/undo.js';
 import { setupScheduler } from './scheduler.js';
 
 export class WorkoutBot {
@@ -52,6 +54,8 @@ export class WorkoutBot {
     this.bot.command('create', (ctx) => createExerciseCommand(ctx, this.db));
     this.bot.command('pay', (ctx) => recordPaymentCommand(ctx, this.db));
     this.bot.command('remaining', (ctx) => remainingSessionsCommand(ctx, this.db));
+    this.bot.command('cancel', (ctx) => cancelCommand(ctx));
+    this.bot.command('undo', (ctx) => undoCommand(ctx, this.db));
     this.bot.command('help', helpCommand);
 
     this.bot.on('callback_query:data', async (ctx) => {
@@ -96,6 +100,11 @@ export class WorkoutBot {
         return;
       }
       
+      if (text === '↩️ Отменить последнее') {
+        await undoCommand(ctx, this.db);
+        return;
+      }
+
       if (text === 'ℹ️ Помощь') {
         await helpCommand(ctx);
         return;
@@ -112,7 +121,7 @@ export class WorkoutBot {
       } else if (isAwaitingRecordPaymentInput(ctx.from.id)) {
         await handleRecordPaymentInput(ctx, this.db);
       } else {
-        await ctx.reply('Используйте кнопки меню или команды:\n/add - добавить упражнение\n/addset - добавить подход\n/history - посмотреть историю\n/create - создать новое упражнение\n/pay - записать оплату\n/remaining - остаток тренировок\n/help - помощь');
+        await ctx.reply('Используйте кнопки меню или команды:\n/add - добавить упражнение\n/addset - добавить подход\n/history - посмотреть историю\n/create - создать упражнение\n/pay - записать оплату\n/remaining - остаток тренировок\n/cancel - отменить действие\n/undo - удалить последнюю запись\n/help - помощь');
       }
     });
   }
@@ -150,6 +159,8 @@ export class WorkoutBot {
       { command: 'create', description: 'Создать новое упражнение' },
       { command: 'pay', description: 'Записать оплату' },
       { command: 'remaining', description: 'Остаток тренировок' },
+      { command: 'cancel', description: 'Отменить текущее действие' },
+      { command: 'undo', description: 'Удалить последнюю запись' },
       { command: 'help', description: 'Помощь и инструкции' }
     ]);
   }

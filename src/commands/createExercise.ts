@@ -1,5 +1,6 @@
 import { Context } from 'grammy';
 import { WorkoutDatabase } from '../db/database';
+import { SessionManager } from '../utils/sessionManager';
 
 interface CreateExerciseSession {
   awaitingName?: boolean;
@@ -7,7 +8,7 @@ interface CreateExerciseSession {
   name?: string;
 }
 
-const createExerciseSessions = new Map<number, CreateExerciseSession>();
+const createExerciseSessions = new SessionManager<CreateExerciseSession>();
 
 export async function createExerciseCommand(ctx: Context, db: WorkoutDatabase) {
   if (!ctx.from) return;
@@ -48,8 +49,8 @@ export async function handleCreateExerciseInput(ctx: Context, db: WorkoutDatabas
         return;
       }
 
-      const exerciseId = db.createExercise(session.name, input);
-      
+      db.createExercise(session.name, input);
+
       await ctx.reply(`✅ Упражнение "${session.name}" (категория: ${input}) успешно создано!`);
       
       createExerciseSessions.delete(ctx.from.id);
@@ -63,4 +64,8 @@ export async function handleCreateExerciseInput(ctx: Context, db: WorkoutDatabas
 
 export function isAwaitingCreateExerciseInput(userId: number): boolean {
   return createExerciseSessions.has(userId);
+}
+
+export function clearCreateExerciseSession(userId: number): void {
+  createExerciseSessions.delete(userId);
 }

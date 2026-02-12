@@ -1,5 +1,4 @@
 import Database from 'better-sqlite3';
-import path from 'path';
 
 export class WorkoutDatabase {
   private db: Database.Database;
@@ -101,7 +100,7 @@ export class WorkoutDatabase {
   getUserId(telegramId: number): number | null {
     const stmt = this.db.prepare('SELECT id FROM users WHERE telegram_id = ?');
     const result = stmt.get(telegramId) as { id: number } | undefined;
-    return result?.id || null;
+    return result?.id ?? null;
   }
 
   getExercises(): Array<{ id: number; name: string; category: string }> {
@@ -293,6 +292,303 @@ export class WorkoutDatabase {
     const stmt = this.db.prepare('SELECT telegram_id FROM users WHERE id = ?');
     const row = stmt.get(userId) as { telegram_id: number } | undefined;
     return row?.telegram_id ?? null;
+  }
+
+  getLastWorkout(userId: number): { id: number; exercise_name: string; weight: number; reps: number; set_number: number; created_at: string } | null {
+    const stmt = this.db.prepare(`
+      SELECT w.id, e.name as exercise_name, w.weight, w.reps,
+             COALESCE(w.set_number, 1) as set_number, w.created_at
+      FROM workouts w
+      JOIN exercises e ON w.exercise_id = e.id
+      WHERE w.user_id = ?
+      ORDER BY w.created_at DESC
+      LIMIT 1
+    `);
+    const row = stmt.get(userId) as { id: number; exercise_name: string; weight: number; reps: number; set_number: number; created_at: string } | undefined;
+    return row ?? null;
+  }
+
+  deleteWorkout(workoutId: number): boolean {
+    const stmt = this.db.prepare('DELETE FROM workouts WHERE id = ?');
+    const result = stmt.run(workoutId);
+    return result.changes > 0;
+  }
+
+  getStats(): {
+    totalUsers: number;
+    totalWorkouts: number;
+    totalExercises: number;
+    activeUsers: number;
+    todayWorkouts: number;
+  } {
+    const totalUsers = this.db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
+    const totalWorkouts = this.db.prepare('SELECT COUNT(*) as count FROM workouts').get() as { count: number };
+    const totalExercises = this.db.prepare('SELECT COUNT(*) as count FROM exercises').get() as { count: number };
+    const activeUsers = this.db.prepare(`
+      SELECT COUNT(DISTINCT user_id) as count
+      FROM workouts
+      WHERE DATE(created_at) >= DATE('now', '-7 days')
+    `).get() as { count: number };
+    const todayWorkouts = this.db.prepare(`
+      SELECT COUNT(*) as count
+      FROM workouts
+      WHERE DATE(created_at) = DATE('now')
+    `).get() as { count: number };
+    return {
+      totalUsers: totalUsers.count,
+      totalWorkouts: totalWorkouts.count,
+      totalExercises: totalExercises.count,
+      activeUsers: activeUsers.count,
+      todayWorkouts: todayWorkouts.count,
+    };
+  }
+
+  getUsers(): Array<{
+    id: number;
+    telegram_id: number;
+    username: string | null;
+    first_name: string | null;
+    created_at: string;
+    workout_days: number;
+    total_sets: number;
+    last_workout: string | null;
+    paid_sessions: number | null;
+    payment_start_date: string | null;
+  }> {
+    const stmt = this.db.prepare(`
+      SELECT
+        u.id,
+        u.telegram_id,
+        u.username,
+        u.first_name,
+        u.created_at,
+        COUNT(DISTINCT DATE(w.created_at)) as workout_days,
+        COUNT(w.id) as total_sets,
+        MAX(w.created_at) as last_workout,
+        p.paid_sessions,
+        p.start_date as payment_start_date
+      FROM users u
+      LEFT JOIN workouts w ON u.id = w.user_id
+      LEFT JOIN payments p ON u.id = p.user_id
+      GROUP BY u.id
+      ORDER BY last_workout DESC
+    `);
+    return stmt.all() as Array<{
+      id: number;
+      telegram_id: number;
+      username: string | null;
+      first_name: string | null;
+      created_at: string;
+      workout_days: number;
+      total_sets: number;
+      last_workout: string | null;
+      paid_sessions: number | null;
+      payment_start_date: string | null;
+    }>;
+  }
+
+  getUserWorkouts(userId: number, limit: number, offset: number): {
+    workouts: Array<{
+      id: number;
+      exercise_name: string;
+      category: string;
+      weight: number;
+      reps: number;
+      set_number: number;
+      created_at: string;
+    }>;
+    total: number;
+    limit: number;
+    offset: number;
+  } {
+    const workouts = this.db.prepare(`
+      SELECT
+        w.id,
+        e.name as exercise_name,
+        e.category,
+        w.weight,
+        w.reps,
+        w.set_number,
+        w.created_at
+      FROM workouts w
+      JOIN exercises e ON w.exercise_id = e.id
+      WHERE w.user_id = ?
+      ORDER BY w.created_at DESC
+      LIMIT ? OFFSET ?
+    `).all(userId, limit, offset) as Array<{
+      id: number;
+      exercise_name: string;
+      category: string;
+      weight: number;
+      reps: number;
+      set_number: number;
+      created_at: string;
+    }>;
+    const total = this.db.prepare(
+      'SELECT COUNT(*) as count FROM workouts WHERE user_id = ?'
+    ).get(userId) as { count: number };
+    return { workouts, total: total.count, limit, offset };
+  }
+
+  getUserStats(userId: number): {
+    totalWorkouts: number;
+    totalSets: number;
+    exerciseStats: Array<{
+      name: string;
+      category: string;
+      total_sets: number;
+      avg_weight: number;
+      max_weight: number;
+      avg_reps: number;
+      last_performed: string;
+    }>;
+    recentProgress: Array<{
+      date: string;
+      exercises_count: number;
+      total_sets: number;
+    }>;
+    payment: {
+      startDate: string;
+      paidSessions: number;
+      remaining: number;
+      done: number;
+    } | null;
+  } {
+    const totalWorkouts = this.db.prepare(
+      'SELECT COUNT(DISTINCT DATE(created_at)) as count FROM workouts WHERE user_id = ?'
+    ).get(userId) as { count: number };
+    const totalSets = this.db.prepare(
+      'SELECT COUNT(*) as count FROM workouts WHERE user_id = ?'
+    ).get(userId) as { count: number };
+    const exerciseStats = this.db.prepare(`
+      SELECT
+        e.name,
+        e.category,
+        COUNT(*) as total_sets,
+        AVG(w.weight) as avg_weight,
+        MAX(w.weight) as max_weight,
+        AVG(w.reps) as avg_reps,
+        MAX(w.created_at) as last_performed
+      FROM workouts w
+      JOIN exercises e ON w.exercise_id = e.id
+      WHERE w.user_id = ?
+      GROUP BY e.id
+      ORDER BY total_sets DESC
+    `).all(userId) as Array<{
+      name: string;
+      category: string;
+      total_sets: number;
+      avg_weight: number;
+      max_weight: number;
+      avg_reps: number;
+      last_performed: string;
+    }>;
+    const recentProgress = this.db.prepare(`
+      SELECT
+        DATE(created_at) as date,
+        COUNT(DISTINCT exercise_id) as exercises_count,
+        COUNT(*) as total_sets
+      FROM workouts
+      WHERE user_id = ?
+      GROUP BY DATE(created_at)
+      ORDER BY date DESC
+      LIMIT 30
+    `).all(userId) as Array<{
+      date: string;
+      exercises_count: number;
+      total_sets: number;
+    }>;
+    const payment = this.getPayment(userId);
+    let paymentInfo: { startDate: string; paidSessions: number; remaining: number; done: number } | null = null;
+    if (payment) {
+      const remaining = this.getRemainingSessions(userId);
+      paymentInfo = {
+        startDate: payment.start_date,
+        paidSessions: payment.paid_sessions,
+        remaining: remaining?.remaining ?? 0,
+        done: remaining?.done ?? 0,
+      };
+    }
+    return {
+      totalWorkouts: totalWorkouts.count,
+      totalSets: totalSets.count,
+      exerciseStats,
+      recentProgress,
+      payment: paymentInfo,
+    };
+  }
+
+  getExerciseStats(exerciseId: number): {
+    exercise: { id: number; name: string; category: string } | null;
+    totalSets: number;
+    userStats: Array<{
+      id: number;
+      username: string | null;
+      first_name: string | null;
+      total_sets: number;
+      avg_weight: number;
+      max_weight: number;
+      last_performed: string;
+    }>;
+    progressData: Array<{
+      date: string;
+      avg_weight: number;
+      max_weight: number;
+      sets_count: number;
+    }>;
+  } {
+    const exercise = this.db.prepare(
+      'SELECT id, name, category FROM exercises WHERE id = ?'
+    ).get(exerciseId) as { id: number; name: string; category: string } | undefined;
+    const totalSets = this.db.prepare(
+      'SELECT COUNT(*) as count FROM workouts WHERE exercise_id = ?'
+    ).get(exerciseId) as { count: number };
+    const userStats = this.db.prepare(`
+      SELECT
+        u.id,
+        u.username,
+        u.first_name,
+        COUNT(*) as total_sets,
+        AVG(w.weight) as avg_weight,
+        MAX(w.weight) as max_weight,
+        MAX(w.created_at) as last_performed
+      FROM workouts w
+      JOIN users u ON w.user_id = u.id
+      WHERE w.exercise_id = ?
+      GROUP BY u.id
+      ORDER BY total_sets DESC
+    `).all(exerciseId) as Array<{
+      id: number;
+      username: string | null;
+      first_name: string | null;
+      total_sets: number;
+      avg_weight: number;
+      max_weight: number;
+      last_performed: string;
+    }>;
+    const progressData = this.db.prepare(`
+      SELECT
+        DATE(created_at) as date,
+        AVG(weight) as avg_weight,
+        MAX(weight) as max_weight,
+        COUNT(*) as sets_count
+      FROM workouts
+      WHERE exercise_id = ?
+      GROUP BY DATE(created_at)
+      ORDER BY date DESC
+      LIMIT 90
+    `).all(exerciseId) as Array<{
+      date: string;
+      avg_weight: number;
+      max_weight: number;
+      sets_count: number;
+    }>;
+    return {
+      exercise: exercise ?? null,
+      totalSets: totalSets.count,
+      userStats,
+      progressData,
+    };
   }
 
   close(): void {

@@ -1,5 +1,7 @@
 import { Context, InlineKeyboard } from 'grammy';
 import { WorkoutDatabase } from '../db/database';
+import { isValidDateDDMMYYYY, ddmmyyyyToISO, isoToDDMMYYYY } from '../utils/date';
+import { SessionManager } from '../utils/sessionManager';
 
 interface HistorySession {
   awaitingDate?: boolean;
@@ -7,7 +9,7 @@ interface HistorySession {
   startDate?: string;
 }
 
-const historySessions = new Map<number, HistorySession>();
+const historySessions = new SessionManager<HistorySession>();
 
 export async function historyCommand(ctx: Context, db: WorkoutDatabase) {
   if (!ctx.from) return;
@@ -35,7 +37,7 @@ export async function handleHistorySelection(ctx: Context, db: WorkoutDatabase) 
 
   const action = ctx.callbackQuery.data;
   let date: string;
-  let workouts: Array<any> = [];
+  let workouts: Array<WorkoutRecord> = [];
 
   try {
     switch (action) {
@@ -92,13 +94,13 @@ export async function handleDateInput(ctx: Context, db: WorkoutDatabase) {
   if (!session) return;
 
   const dateText = ctx.message.text.trim();
-  
-  if (!isValidDate(dateText)) {
+
+  if (!isValidDateDDMMYYYY(dateText)) {
     await ctx.reply('Неверный формат даты. Используйте формат ДД.ММ.ГГГГ (например: 22.07.2024):');
     return;
   }
   
-  const isoDate = convertToISODate(dateText);
+  const isoDate = ddmmyyyyToISO(dateText);
 
   const userId = db.getUserId(ctx.from.id);
   if (!userId) {
@@ -109,7 +111,7 @@ export async function handleDateInput(ctx: Context, db: WorkoutDatabase) {
   try {
     if (session.awaitingDate) {
       const workouts = db.getWorkoutsByDate(userId, isoDate);
-      await showWorkouts(ctx, workouts, `Тренировки за ${formatDisplayDate(dateText)}`);
+      await showWorkouts(ctx, workouts, `Тренировки за ${dateText}`);
       historySessions.delete(ctx.from.id);
     } else if (session.awaitingPeriod === 'start') {
       session.startDate = isoDate;
@@ -122,7 +124,7 @@ export async function handleDateInput(ctx: Context, db: WorkoutDatabase) {
       }
       
       const workouts = db.getWorkoutsByPeriod(userId, session.startDate, isoDate);
-      await showWorkouts(ctx, workouts, `Тренировки с ${formatDate(session.startDate)} по ${formatDisplayDate(dateText)}`);
+      await showWorkouts(ctx, workouts, `Тренировки с ${isoToDDMMYYYY(session.startDate)} по ${dateText}`);
       historySessions.delete(ctx.from.id);
     }
   } catch (error) {
@@ -131,7 +133,15 @@ export async function handleDateInput(ctx: Context, db: WorkoutDatabase) {
   }
 }
 
-async function showWorkouts(ctx: Context, workouts: Array<any>, title: string) {
+interface WorkoutRecord {
+  exercise_name: string;
+  weight: number;
+  reps: number;
+  set_number: number;
+  created_at: string;
+}
+
+async function showWorkouts(ctx: Context, workouts: Array<WorkoutRecord>, title: string) {
   if (workouts.length === 0) {
     await ctx.reply(`${title}:\n\nТренировок не найдено.`);
     return;
@@ -139,7 +149,7 @@ async function showWorkouts(ctx: Context, workouts: Array<any>, title: string) {
 
   let message = `${title}:\n\n`;
   
-  const groupedByDate: { [key: string]: Array<any> } = {};
+  const groupedByDate: Record<string, Array<WorkoutRecord>> = {};
   
   workouts.forEach(workout => {
     const date = workout.created_at.split(' ')[0];
@@ -150,9 +160,9 @@ async function showWorkouts(ctx: Context, workouts: Array<any>, title: string) {
   });
 
   Object.keys(groupedByDate).sort().forEach(date => {
-    message += `📅 ${formatDate(date)}:\n`;
+    message += `📅 ${isoToDDMMYYYY(date)}:\n`;
     
-    const exerciseGroups: { [key: string]: Array<any> } = {};
+    const exerciseGroups: Record<string, Array<WorkoutRecord>> = {};
     groupedByDate[date].forEach(workout => {
       if (!exerciseGroups[workout.exercise_name]) {
         exerciseGroups[workout.exercise_name] = [];
@@ -194,32 +204,11 @@ async function showWorkouts(ctx: Context, workouts: Array<any>, title: string) {
   }
 }
 
-function isValidDate(dateString: string): boolean {
-  const regex = /^\d{2}\.\d{2}\.\d{4}$/;
-  if (!regex.test(dateString)) return false;
-  const [day, month, year] = dateString.split('.').map(Number);
-  const date = new Date(year, month - 1, day);
-  return date instanceof Date && !isNaN(date.getTime()) &&
-         date.getDate() === day &&
-         date.getMonth() === month - 1 &&
-         date.getFullYear() === year;
-}
-
-function convertToISODate(dateString: string): string {
-  const [day, month, year] = dateString.split('.');
-  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-}
-
-function formatDisplayDate(dateString: string): string {
-  return dateString;
-}
-
-function formatDate(isoDate: string): string {
-  const [y, m, d] = isoDate.split('-');
-  return `${d}.${m}.${y}`;
-}
-
 export function isAwaitingHistoryInput(userId: number): boolean {
   const session = historySessions.get(userId);
   return !!(session?.awaitingDate || session?.awaitingPeriod);
+}
+
+export function clearHistorySession(userId: number): void {
+  historySessions.delete(userId);
 }
